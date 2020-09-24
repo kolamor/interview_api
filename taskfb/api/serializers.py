@@ -62,11 +62,15 @@ class AnswerSerializer(UnknownFieldsSerializerMixin, AtomicCreateUpdate,
 
     def create(self, validated_data):
         """Варианты Question settings.QUESTION_OPTIONS"""
-        question = Question.objects.get(pk=validated_data['question'])
+        if isinstance(validated_data['question'], Question):
+            question = validated_data['question']
+        elif isinstance(validated_data['question'], int):
+            question = Question.objects.get(pk=validated_data['question'])
         type_question = question.type_question
+
         if type_question == 'text' or 'choice':
             data = self.Meta.model.objects.filter(user_id=validated_data['user_id'],
-                                                  question=question).count()
+                                                  question=validated_data['question']).count()
             if data:
                 raise ValidationError("The answer does not create. ")
 
