@@ -3,7 +3,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 
 
-__all__ = ('Interview', 'Question', 'Answer', )
+__all__ = ('Interview', 'Question', 'Answer', 'UserAnswer' )
 
 USER = get_user_model()
 
@@ -40,7 +40,6 @@ class Question(models.Model):
 class Answer(models.Model):
     question = models.ForeignKey(Question, related_name='answers', on_delete=models.CASCADE)
     text = models.TextField()
-    user_id = models.IntegerField()
 
     class Meta:
         verbose_name = 'Ответ'
@@ -50,10 +49,16 @@ class Answer(models.Model):
         return str(self.text)
 
 
-# class UserAnswer(models.Model):
-#     user_id = models.IntegerField()
-#     answer = models.ManyToManyField(Answer, related_name='user_answers')
-#     text = models.TextField(blank=True)
-#
-#     def __str__(self):
-#         return str(f'{self.answer}')
+class UserAnswer(models.Model):
+    user_id = models.IntegerField()
+    answer = models.ManyToManyField(Answer, related_name='answer', blank=True)
+    question = models.ForeignKey(Question, related_name='question', on_delete=models.CASCADE)
+    text = models.TextField(blank=True)
+
+    def __str__(self):
+        return str(f'{self.answer}')
+
+    class Meta:
+        verbose_name = 'Ответ пользователя'
+        verbose_name_plural = 'Ответы пользователя'
+

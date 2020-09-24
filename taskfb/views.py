@@ -1,6 +1,7 @@
 from rest_framework import generics
 from .models import *
-from .api.serializers import QuestionSerializer, InterviewSerializer, InterviewSerializer, QuestionSerializer
+from .api.serializers import QuestionSerializer, InterviewSerializer, InterviewSerializer, QuestionSerializer, \
+    UserAnswerSerializer, UserAnswerViewSerializer
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication, TokenAuthentication
 from rest_framework.permissions import IsAdminUser, IsAuthenticated, BasePermission, AllowAny
 from rest_framework.response import Response
@@ -21,6 +22,7 @@ def wrapper_serializer(serializer):
 
 
 def block_while_null(model, field='ended_at',):
+    """Отдает статус 400 если у модели нет поля в db"""
     def block(func):
         def wrapper(*args, **kwargs):
             self, request, *_ = args
@@ -149,20 +151,37 @@ class ActiveInterviewListView(generics.ListAPIView, UserAuthenticatorPermissionV
     queryset = Interview.objects.all().filter(ended_at__isnull=True).filter(started_at__isnull=False)
     serializer_class = InterviewSerializer
 
-#
-# class PassingInterview(generics.ListAPIView,
-#                        mixins.CreateModelMixin,
-#                        mixins.UpdateModelMixin,
-#                        UserAuthenticatorPermissionView):
-#
-#     queryset = UserAnswer.objects.all()
-#     serializer_class = UserAnswerSerializer
-#
-#     def post(self, request, *args, **kwargs):
-#         """ id answer, user_id, text( no required) """
-#
-#         return self.create(request, *args, **kwargs)
 
+class UserAnswerListView(generics.ListAPIView,
+                         mixins.CreateModelMixin,
+                         mixins.UpdateModelMixin,
+                         # UserAuthenticatorPermissionView
+                         ):
+
+    queryset = UserAnswer.objects.all()
+    serializer_class = UserAnswerViewSerializer
+
+    permission_classes = ()
+
+    def get(self, request, *args, **kwargs):
+        return self.list(request, *args, **kwargs)
+
+    def get_queryset(self):
+        qw = UserAnswer.objects.all().filter(user_id=self.kwargs['pk'])
+        return qw
+
+
+class UserAnswerDetailView(mixins.CreateModelMixin,
+                           generics.RetrieveAPIView,
+                           mixins.UpdateModelMixin,
+                           # UserAuthenticatorPermissionView
+                           ):
+    permission_classes = ()
+    queryset = UserAnswer.objects.all()
+    serializer_class = UserAnswerSerializer
+
+    def post(self, request, pk, *args, **kwargs):
+        return self.create(request, pk, *args, **kwargs)
 
 
 
