@@ -15,6 +15,7 @@ def get_type_question(validated_data):
 
 
 class UnknownFieldsSerializerMixin:
+    """Проверка на лишние поля"""
     def is_valid(self, raise_exception=False):
         super().is_valid(False)
 

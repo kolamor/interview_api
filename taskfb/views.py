@@ -1,6 +1,6 @@
 from rest_framework import generics
 from .models import *
-from .api.serializers import QuestionSerializer, InterviewSerializer, InterviewSerializer, QuestionSerializer, \
+from .api.serializers import  InterviewSerializer, QuestionSerializer, \
     UserAnswerSerializer, UserAnswerViewSerializer
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication, TokenAuthentication
 from rest_framework.permissions import IsAdminUser, IsAuthenticated, BasePermission, AllowAny
@@ -28,7 +28,7 @@ def block_while_null(model, field='ended_at',):
             self, request, *_ = args
             data = request.data
             if not data.get(field, None):
-                obj = model.objects.all()
+                obj = model.objects.filter(pk=request.parser_context['kwargs']['pk'])
                 if not getattr(obj, field, None):
                     return Response({"error": f'field {field }is Null in db or does not sent.'},
                                     status=status.HTTP_400_BAD_REQUEST)
@@ -36,6 +36,19 @@ def block_while_null(model, field='ended_at',):
         return wrapper
     return block
 
+
+class LoginView(APIView):
+    permission_classes = ()
+
+    def post(self, request, *args, **kwargs):
+        username = request.data.get("username")
+        password = request.data.get("password")
+        user = authenticate(username=username, password=password)
+        if user:
+            Token.objects.get_or_create(user=user)
+            return Response({"token": user.auth_token.key},)
+        else:
+            return Response({"error": "Wrong Credentials"}, status=status.HTTP_400_BAD_REQUEST)
 
 class UserAuthenticatorPermissionView:
     def get_permissions(self):
@@ -99,6 +112,7 @@ class InterviewDetailView(mixins.CreateModelMixin,
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def get_serializer_context(self):
+        """передаем ключ к контекс"""
         context = super().get_serializer_context()
         context_key = getattr(self.serializer_class.Meta, ('exist_key_in_context'), None)
         if context_key and 'pk' in self.kwargs:
@@ -111,9 +125,6 @@ class QuestionListView(generics.ListAPIView, mixins.CreateModelMixin, mixins.Upd
     queryset = Question.objects.all()
     serializer_class = QuestionSerializer
 
-    def post(self, request, *args, **kwargs):
-        return self.create(request, *args, **kwargs)
-
 
 class QuestionDetailView(generics.RetrieveAPIView, mixins.CreateModelMixin, mixins.UpdateModelMixin,
                          AdminAuthenticatorPermissionView):
@@ -123,28 +134,33 @@ class QuestionDetailView(generics.RetrieveAPIView, mixins.CreateModelMixin, mixi
     def post(self, request, *args, **kwargs):
         return self.create(request, *args, **kwargs)
 
-    @block_while_null(Interview, field='ended_at')
+    def create(self, request, *args, **kwargs):
+        data = request.data
+        if 'interview' not in data:
+            return Response({"error": "interview field required"}, status=status.HTTP_201_CREATED)
+        data['id'] = kwargs['pk']
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
     def put(self, request, pk, format=None):
+        self.get_interview()
         return self.update(request, pk, format=None)
 
     def delete(self, request, pk, format=None):
-        interview = self.get_object()
-        interview.delete()
+        question = self.get_interview()
+        question.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-
-class LoginView(APIView):
-    permission_classes = ()
-
-    def post(self, request, *args, **kwargs):
-        username = request.data.get("username")
-        password = request.data.get("password")
-        user = authenticate(username=username, password=password)
-        if user:
-            Token.objects.get_or_create(user=user)
-            return Response({"token": user.auth_token.key},)
-        else:
-            return Response({"error": "Wrong Credentials"}, status=status.HTTP_400_BAD_REQUEST)
+    def get_interview(self):
+        question = self.get_object()
+        interview = Interview.objects.get(pk=question.interview.pk)
+        if not interview.ended_at:
+            return Response({"error": f'field ended_at is Null in db or does not sent.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        return question
 
 
 class ActiveInterviewListView(generics.ListAPIView, UserAuthenticatorPermissionView):
@@ -155,7 +171,6 @@ class ActiveInterviewListView(generics.ListAPIView, UserAuthenticatorPermissionV
 class UserAnswerListView(generics.ListAPIView,
                          mixins.CreateModelMixin,
                          mixins.UpdateModelMixin,
-                         # UserAuthenticatorPermissionView
                          ):
 
     queryset = UserAnswer.objects.all()
@@ -174,7 +189,6 @@ class UserAnswerListView(generics.ListAPIView,
 class UserAnswerDetailView(mixins.CreateModelMixin,
                            generics.RetrieveAPIView,
                            mixins.UpdateModelMixin,
-                           # UserAuthenticatorPermissionView
                            ):
     permission_classes = ()
     queryset = UserAnswer.objects.all()
